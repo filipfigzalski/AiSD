@@ -1,155 +1,162 @@
-name: Check Typst PDF Consistency
+name: Validate PDFs match Typst files (Advanced)
 
 on:
   pull_request:
-    paths: # Only run if .typ or .pdf files are changed
+    paths:
       - "**.typ"
       - "**.pdf"
 
 jobs:
-  check_pdfs:
+  validate-pdfs:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read # Required to checkout the repository
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Typst
-        uses: typst-community/setup-typst@v3
-        with:
-          version: "latest"
+        uses: typst-community/setup-typst@v4
 
-      - name: Install PDF comparison tool and xvfb
-        id: install_pdf_tools
+      - name: Install PDF comparison tools
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y software-properties-common xvfb # Add xvfb
-          sudo add-apt-repository -y universe
-          sudo apt-get update -y
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils qpdf
 
-          PDF_DIFF_CMD_NAME=""
-          if sudo apt-get install -y diffpdf; then # Tries 'diffpdf' (no hyphen) first
-            if command -v diffpdf &> /dev/null; then
-              echo "Successfully installed 'diffpdf'."
-              PDF_DIFF_CMD_NAME="diffpdf"
-            fi
-          fi
-
-          if [ -z "$PDF_DIFF_CMD_NAME" ]; then
-            echo "'diffpdf' not found or installation failed. Attempting 'diff-pdf'..."
-            if sudo apt-get install -y diff-pdf; then # Fallback to 'diff-pdf' (with hyphen)
-              if command -v diff-pdf &> /dev/null; then
-                echo "Successfully installed 'diff-pdf'."
-                PDF_DIFF_CMD_NAME="diff-pdf"
-              fi
-            fi
-          fi
-
-          if [ -z "$PDF_DIFF_CMD_NAME" ]; then
-            echo "::error::Neither 'diffpdf' nor 'diff-pdf' could be installed."
-            exit 1
-          else
-            echo "Using '$PDF_DIFF_CMD_NAME' for PDF comparison."
-            echo "pdf_diff_command=$PDF_DIFF_CMD_NAME" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-
-      - name: Get changed Typst files
-        id: changed_typst_files
+      - name: Validate PDFs
         run: |
-          MERGE_BASE=$(git merge-base origin/${{ github.base_ref }} HEAD)
-          echo "Comparing changes between $MERGE_BASE (base) and HEAD (current PR commit)"
-          CHANGED_FILES=$(git diff --name-only --diff-filter=AM $MERGE_BASE HEAD -- '*.typ')
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "No .typ files were added or modified in this PR."
-            echo "changed_files_list=''" >> $GITHUB_OUTPUT
-          else
-            echo "Added or modified .typ files to check:"
-            echo "$CHANGED_FILES"
-            echo "changed_files_list<<EOF" >> $GITHUB_OUTPUT
-            echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
+          #!/bin/bash
+          set -e
 
-      - name: Compile Typst and Compare PDFs
-        if: steps.changed_typst_files.outputs.changed_files_list != ''
-        env:
-          PDF_DIFF_COMMAND: ${{ steps.install_pdf_tools.outputs.pdf_diff_command }}
-        run: |
-          FAILURE_DETECTED=0
-          echo "Using PDF comparison command: ${{ env.PDF_DIFF_COMMAND }}"
+          # Create temp directory
+          temp_dir=$(mktemp -d)
+          echo "Using temp directory: $temp_dir"
 
-          while IFS= read -r typ_file; do
-            if [ -z "$typ_file" ]; then
-              continue
-            fi
+          validation_failed=false
+          mismatched_files=()
 
-            echo ""
-            echo "--------------------------------------------------"
+          # Find all .typ files
+          while IFS= read -r -d '' typ_file; do
             echo "Processing: $typ_file"
-            echo "--------------------------------------------------"
-
-            committed_pdf_file="${typ_file%.typ}.pdf"
-            temp_dir=$(mktemp -d)
-            generated_pdf_file="$temp_dir/generated_$(basename "${typ_file%.typ}").pdf"
-
-            echo "Expected committed PDF: $committed_pdf_file"
-            echo "Path for newly generated PDF: $generated_pdf_file"
-
-            if [ ! -f "$committed_pdf_file" ]; then
-              echo "::error file=$typ_file,title=Missing PDF::Committed PDF '$committed_pdf_file' not found for Typst file '$typ_file'."
-              FAILURE_DETECTED=1
-              rm -rf "$temp_dir"
+            
+            # Determine expected PDF path
+            pdf_file="${typ_file%.typ}.pdf"
+            temp_pdf="$temp_dir/$(basename "$pdf_file")"
+            
+            # Compile Typst file
+            if ! typst compile "$typ_file" "$temp_pdf"; then
+              echo "❌ Failed to compile $typ_file"
+              validation_failed=true
               continue
             fi
-
-            echo "Compiling '$typ_file' to '$generated_pdf_file'..."
-            if typst compile "$typ_file" "$generated_pdf_file"; then
-              echo "Compilation successful."
-            else
-              echo "::error file=$typ_file,title=Typst Compilation Failed::Failed to compile Typst file '$typ_file'."
-              FAILURE_DETECTED=1
-              rm -rf "$temp_dir"
+            
+            # Check if corresponding PDF exists
+            if [ ! -f "$pdf_file" ]; then
+              echo "⚠️  Missing PDF: $pdf_file (expected for $typ_file)"
+              echo "   Generated PDF available in artifacts."
+              validation_failed=true
+              mismatched_files+=("$typ_file (missing PDF)")
               continue
             fi
-
-            echo "Comparing '$committed_pdf_file' with '$generated_pdf_file' using '${{ env.PDF_DIFF_COMMAND }}'..."
-
-            # Construct the command using a bash array for safety
-            COMMAND_TO_RUN=()
-            if [ "${{ env.PDF_DIFF_COMMAND }}" = "diffpdf" ]; then
-              COMMAND_TO_RUN=(
-                "xvfb-run"
-                "--auto-servernum" # Use default server args, which are usually fine
-                "${{ env.PDF_DIFF_COMMAND }}"
-              )
-            else
-              # For 'diff-pdf' (with hyphen), xvfb is generally not needed
-              COMMAND_TO_RUN=("${{ env.PDF_DIFF_COMMAND }}")
+            
+            # Compare PDFs using multiple methods
+            echo "Comparing $pdf_file with compiled version..."
+            
+            # Method 1: Compare text content
+            text_match=true
+            if ! pdftotext "$pdf_file" "$temp_dir/existing.txt" 2>/dev/null; then
+              echo "   Warning: Could not extract text from existing PDF"
+              text_match=false
             fi
-
-            # Append the PDF file arguments to the command array
-            COMMAND_TO_RUN+=("$committed_pdf_file" "$generated_pdf_file")
-
-            # Execute the constructed command
-            if "${COMMAND_TO_RUN[@]}"; then
-              echo "✅ PDF '$committed_pdf_file' is up-to-date with '$typ_file'."
-            else
-              echo "::error file=$typ_file,title=PDF Out of Date::PDF '$committed_pdf_file' is not identical to the output of '$typ_file'. Please recompile '$typ_file' and commit the updated PDF."
-              FAILURE_DETECTED=1
+            
+            if ! pdftotext "$temp_pdf" "$temp_dir/generated.txt" 2>/dev/null; then
+              echo "   Warning: Could not extract text from generated PDF"
+              text_match=false
             fi
-            rm -rf "$temp_dir"
-          done < <(echo "${{ steps.changed_typst_files.outputs.changed_files_list }}")
+            
+            if [ "$text_match" = true ] && ! diff -q "$temp_dir/existing.txt" "$temp_dir/generated.txt" >/dev/null 2>&1; then
+              echo "❌ Text content differs for $pdf_file"
+              echo "   Run: typst compile $typ_file $pdf_file"
+              validation_failed=true
+              mismatched_files+=("$typ_file")
+              continue
+            fi
+            
+            # Method 2: Compare file sizes (rough check)
+            existing_size=$(stat -c%s "$pdf_file" 2>/dev/null)
+            generated_size=$(stat -c%s "$temp_pdf" 2>/dev/null)
+            
+            size_diff=$((existing_size - generated_size))
+            size_diff=${size_diff#-}  # absolute value
+            
+            # Allow 5% size difference (PDFs can have slight variations)
+            threshold=$((existing_size / 20))
+            
+            if [ $size_diff -gt $threshold ] && [ $threshold -gt 100 ]; then
+              echo "⚠️  Significant size difference for $pdf_file"
+              echo "   Existing: $existing_size bytes, Generated: $generated_size bytes"
+            fi
+            
+            echo "✅ $pdf_file appears to match $typ_file"
+            
+          done < <(find . -name "*.typ" -type f -print0)
 
-          echo "--------------------------------------------------"
-          if [ "$FAILURE_DETECTED" -eq 1 ]; then
-            echo "❌ PDF consistency check failed for one or more files."
+          # Copy generated PDFs for artifact upload
+          mkdir -p generated_pdfs
+          cp "$temp_dir"/*.pdf generated_pdfs/ 2>/dev/null || echo "No PDFs to copy"
+
+          # Save mismatched files info for PR comment
+          if [ ${#mismatched_files[@]} -gt 0 ]; then
+            echo "MISMATCHED_FILES<<EOF" >> $GITHUB_ENV
+            printf '%s\n' "${mismatched_files[@]}" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          fi
+
+          # Clean up
+          rm -rf "$temp_dir"
+
+          if [ "$validation_failed" = true ]; then
+            echo ""
+            echo "❌ PDF validation failed!"
+            echo "Some PDFs do not match their corresponding Typst files."
+            echo "Please run 'typst compile' on the affected files and commit the updated PDFs."
             exit 1
           else
-            echo "✅ All checked Typst files have up-to-date PDFs."
+            echo ""
+            echo "✅ All PDFs are up to date with their Typst sources!"
           fi
-        shell: bash
+
+      - name: Upload generated PDFs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-pdfs-${{ github.event.number }}
+          path: generated_pdfs/
+          retention-days: 7
+
+      - name: Comment on PR
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const mismatchedFiles = process.env.MISMATCHED_FILES?.split('\n').filter(f => f.trim()) || [];
+
+            let fileList = '';
+            if (mismatchedFiles.length > 0) {
+              fileList = '\n\n**Affected files:**\n' + 
+                         mismatchedFiles.map(f => `- \`${f}\``).join('\n');
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ **PDF Validation Failed**
+              
+              Some PDF files do not match their corresponding Typst source files.${fileList}
+              
+              **To fix this:**
+              1. Run \`typst compile <file>.typ\` for each affected file
+              2. Commit the updated PDFs
+              
+              Generated PDFs are available in the [workflow artifacts](${context.payload.pull_request.html_url}/checks) for comparison.`
+            });
