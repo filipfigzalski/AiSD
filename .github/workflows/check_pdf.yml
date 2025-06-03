@@ -26,15 +26,7 @@ jobs:
       - name: Install diff-pdf
         run: |
           sudo apt-get update -y
-          # Ensure software-properties-common is installed for add-apt-repository
-          sudo apt-get install -y software-properties-common
-          # Explicitly enable the 'universe' repository
-          # This is often enabled by default on GitHub runners, but being explicit can help
-          sudo add-apt-repository -y universe
-          # Update package lists again after ensuring 'universe' is enabled
-          sudo apt-get update -y
-          # Now, try to install diff-pdf
-          sudo apt-get install -y diff-pdf
+          sudo apt-get install -y diffpdf
         shell: bash
 
       - name: Get changed Typst files
