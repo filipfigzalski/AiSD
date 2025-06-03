@@ -75,3 +75,4 @@ Rozpatrzmy przypadki:
 
 Co dowodzi poprawności algorytmu Kruskala.
 
+#align(right)[#sym.qed]
