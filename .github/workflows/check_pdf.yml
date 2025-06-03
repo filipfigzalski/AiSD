@@ -3,8 +3,8 @@ name: Check Typst PDF Consistency
 on:
   pull_request:
     paths: # Only run if .typ or .pdf files are changed
-      - '**.typ'
-      - '**.pdf'
+      - "**.typ"
+      - "**.pdf"
 
 jobs:
   check_pdfs:
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Typst
         uses: typst/setup-typst@v1
         with:
-          version: 'latest' # Or pin to a specific Typst version, e.g., '0.11.0'
+          version: "latest" # Or pin to a specific Typst version, e.g., '0.11.0'
 
       - name: Install diff-pdf
         run: |
@@ -126,9 +126,3 @@ jobs:
             echo "✅ All checked Typst files have up-to-date PDFs."
           fi
         shell: bash
-        env:
-          # If you have project-specific fonts in a directory (e.g., 'fonts/' at the root),
-          # Typst will usually find them if they are in the root or input file's directory.
-          # For more explicit control or other locations, set TYPST_FONT_PATHS.
-          # Example: TYPST_FONT_PATHS: "path/to/your/fonts"
-          # This can also be passed via --font-path to `typst compile` as shown in comments above.
