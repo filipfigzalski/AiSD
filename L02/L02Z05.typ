@@ -193,3 +193,4 @@ usunięcie innych wierzchołków nie poprawi sytuacji $v$). Każdy wierzchołek,
 który mógłby należeć do jakiegokolwiek rozwiązania, nie zostanie usunięty. Zatem
 znaleziony zbiór $V'$ jest największym możliwym podzbiorem.
 
+#align(right)[#sym.qed]
