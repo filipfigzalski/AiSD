@@ -177,6 +177,8 @@ jest w `Q` i nie jest usunięty. Dlatego każdy $w in V'$ spełnia oba warunki:
 
 Jest to dokładnie definicja wymaganego podzbioru.
 
+#align(right)[#sym.qed]
+
 == Maksymalność
 
 Algorytm usuwa wierzchołki iteracyjnie. Wierzchołek jest usuwany tylko wtedy,
