@@ -15,37 +15,31 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          # Fetch all history to accurately determine changes against the merge base
           fetch-depth: 0
 
       - name: Setup Typst
-        uses: typst-community/setup-typst@v3 # Corrected action
+        uses: typst-community/setup-typst@v3
         with:
-          version: "latest" # Or pin to a specific Typst version, e.g., '0.11.0'
+          version: "latest"
 
-      - name: Install diff-pdf
+      - name: Install diffpdf # Renamed step for clarity, installs 'diffpdf'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y diffpdf
+          sudo apt-get install -y diffpdf # Installs 'diffpdf' (no hyphen)
         shell: bash
 
       - name: Get changed Typst files
         id: changed_typst_files
         run: |
-          # Determine the merge base between the PR branch (HEAD) and the target branch
           MERGE_BASE=$(git merge-base origin/${{ github.base_ref }} HEAD)
           echo "Comparing changes between $MERGE_BASE (base) and HEAD (current PR commit)"
-
-          # List .typ files that were Added (A) or Modified (M) in the PR
           CHANGED_FILES=$(git diff --name-only --diff-filter=AM $MERGE_BASE HEAD -- '*.typ')
-
           if [ -z "$CHANGED_FILES" ]; then
             echo "No .typ files were added or modified in this PR."
             echo "changed_files_list=''" >> $GITHUB_OUTPUT
           else
             echo "Added or modified .typ files to check:"
             echo "$CHANGED_FILES"
-            # Use a heredoc to pass multiline output correctly
             echo "changed_files_list<<EOF" >> $GITHUB_OUTPUT
             echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
@@ -56,57 +50,57 @@ jobs:
         if: steps.changed_typst_files.outputs.changed_files_list != ''
         run: |
           FAILURE_DETECTED=0
-          # Read the list of changed files passed from the previous step
           echo "${{ steps.changed_typst_files.outputs.changed_files_list }}" | while IFS= read -r typ_file; do
-            # Skip empty lines, if any (robustness)
             if [ -z "$typ_file" ]; then
               continue
             fi
-
             echo ""
             echo "--------------------------------------------------"
             echo "Processing: $typ_file"
             echo "--------------------------------------------------"
-
             committed_pdf_file="${typ_file%.typ}.pdf"
-            # Create a temporary directory for the generated PDF for clean isolation and cleanup
             temp_dir=$(mktemp -d)
-            # Sanitize basename for the generated PDF to avoid issues with paths
             generated_pdf_file="$temp_dir/generated_$(basename "${typ_file%.typ}").pdf"
-
             echo "Expected committed PDF: $committed_pdf_file"
             echo "Path for newly generated PDF: $generated_pdf_file"
 
-            # 1. Check if the corresponding PDF file exists in the pull request
             if [ ! -f "$committed_pdf_file" ]; then
               echo "::error file=$typ_file,title=Missing PDF::Committed PDF '$committed_pdf_file' not found for Typst file '$typ_file'. Please ensure the PDF is compiled and included in the PR."
               FAILURE_DETECTED=1
-              rm -rf "$temp_dir" # Clean up temp directory
-              continue # Move to the next file
+              rm -rf "$temp_dir"
+              continue
             fi
 
-            # 2. Compile the .typ file
             echo "Compiling '$typ_file' to '$generated_pdf_file'..."
-            # If you use custom fonts located in your repository (e.g., in an 'assets/fonts' directory),
-            # you can pass them to the typst compile command:
-            # typst compile --font-path ./assets/fonts "$typ_file" "$generated_pdf_file"
-            # Alternatively, set the TYPST_FONT_PATHS environment variable (see 'env' section below).
             if typst compile "$typ_file" "$generated_pdf_file"; then
               echo "Compilation successful."
             else
               echo "::error file=$typ_file,title=Typst Compilation Failed::Failed to compile Typst file '$typ_file'."
               FAILURE_DETECTED=1
-              rm -rf "$temp_dir" # Clean up temp directory
-              continue # Move to the next file
+              rm -rf "$temp_dir"
+              continue
             fi
 
-            # 3. Compare the newly generated PDF with the committed PDF
             echo "Comparing '$committed_pdf_file' with '$generated_pdf_file'..."
-            if diff-pdf "$committed_pdf_file" "$generated_pdf_file"; then
+            # Use 'diffpdf' (no hyphen) to match the installed package
+            if diffpdf "$committed_pdf_file" "$generated_pdf_file"; then
               echo "✅ PDF '$committed_pdf_file' is up-to-date with '$typ_file'."
             else
-              # diff-pdf exits with a non-zero status if files are different
               echo "::error file=$typ_file,title=PDF Out of Date::PDF '$committed_pdf_file' is not identical to the output of '$typ_file'. Please recompile '$typ_file' and commit the updated PDF."
-              # Optional: You could generate a visual diff PDF and upload it as an artifact
-              # diff_output_filename="diff_$(basename "${typ_file%.typ}").pdf"
-              # diff-pdf --output-diff="$temp_dir/$diff_output_filename" "$committed_pdf_file"
+              # If you uncomment this, also use 'diffpdf'
+              # visual_diff_output_filename="diff_$(basename "${typ_file%.typ}").pdf"
+              # diffpdf --output-diff="$temp_dir/$visual_diff_output_filename" "$committed_pdf_file" "$generated_pdf_file"
+              # echo "Visual diff generated: $temp_dir/$visual_diff_output_filename (not uploaded by default)"
+              FAILURE_DETECTED=1
+            fi
+            rm -rf "$temp_dir"
+          done
+
+          echo "--------------------------------------------------"
+          if [ "$FAILURE_DETECTED" -eq 1 ]; then
+            echo "❌ PDF consistency check failed for one or more files."
+            exit 1
+          else
+            echo "✅ All checked Typst files have up-to-date PDFs."
+          fi
+        shell: bash
