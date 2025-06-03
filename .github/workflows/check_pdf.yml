@@ -15,17 +15,50 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Fetch all history for accurate diff
 
       - name: Setup Typst
         uses: typst-community/setup-typst@v3
         with:
           version: "latest"
 
-      - name: Install diffpdf # Renamed step for clarity, installs 'diffpdf'
+      - name: Install PDF comparison tool and xvfb
+        id: install_pdf_tools # Give an ID to this step
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y diffpdf # Installs 'diffpdf' (no hyphen)
+          sudo apt-get install -y software-properties-common xvfb # Add xvfb
+          sudo add-apt-repository -y universe
+          sudo apt-get update -y
+
+          PDF_DIFF_CMD_NAME=""
+          # Try installing 'diffpdf' (common on newer Ubuntu, e.g., 24.04 "noble")
+          if sudo apt-get install -y diffpdf; then
+            if command -v diffpdf &> /dev/null; then
+              echo "Successfully installed 'diffpdf'."
+              PDF_DIFF_CMD_NAME="diffpdf"
+            fi
+          fi
+
+          # If 'diffpdf' wasn't found or failed, try 'diff-pdf' (common on older Ubuntu, e.g., 22.04 "jammy")
+          # Note: 'diff-pdf' is typically a true CLI tool and might not need xvfb.
+          # The logic here prioritizes 'diffpdf' if available.
+          if [ -z "$PDF_DIFF_CMD_NAME" ]; then
+            echo "'diffpdf' not found or installation failed. Attempting 'diff-pdf'..."
+            if sudo apt-get install -y diff-pdf; then
+              if command -v diff-pdf &> /dev/null; then
+                echo "Successfully installed 'diff-pdf'."
+                PDF_DIFF_CMD_NAME="diff-pdf"
+              fi
+            fi
+          fi
+
+          if [ -z "$PDF_DIFF_CMD_NAME" ]; then
+            echo "::error::Neither 'diffpdf' nor 'diff-pdf' could be installed. Please check package availability for the runner's OS."
+            exit 1
+          else
+            echo "Using '$PDF_DIFF_CMD_NAME' for PDF comparison."
+            echo "pdf_diff_command=$PDF_DIFF_CMD_NAME" >> $GITHUB_OUTPUT
+          fi
         shell: bash
 
       - name: Get changed Typst files
@@ -48,19 +81,28 @@ jobs:
 
       - name: Compile Typst and Compare PDFs
         if: steps.changed_typst_files.outputs.changed_files_list != ''
+        env:
+          PDF_DIFF_COMMAND: ${{ steps.install_pdf_tools.outputs.pdf_diff_command }}
         run: |
           FAILURE_DETECTED=0
-          echo "${{ steps.changed_typst_files.outputs.changed_files_list }}" | while IFS= read -r typ_file; do
+          echo "Using PDF comparison command: ${{ env.PDF_DIFF_COMMAND }}"
+
+          # Use process substitution to avoid subshell issues with FAILURE_DETECTED
+          while IFS= read -r typ_file; do
+            # Skip empty lines, if any (robustness)
             if [ -z "$typ_file" ]; then
               continue
             fi
+
             echo ""
             echo "--------------------------------------------------"
             echo "Processing: $typ_file"
             echo "--------------------------------------------------"
+
             committed_pdf_file="${typ_file%.typ}.pdf"
             temp_dir=$(mktemp -d)
             generated_pdf_file="$temp_dir/generated_$(basename "${typ_file%.typ}").pdf"
+
             echo "Expected committed PDF: $committed_pdf_file"
             echo "Path for newly generated PDF: $generated_pdf_file"
 
@@ -81,20 +123,25 @@ jobs:
               continue
             fi
 
-            echo "Comparing '$committed_pdf_file' with '$generated_pdf_file'..."
-            # Use 'diffpdf' (no hyphen) to match the installed package
-            if diffpdf "$committed_pdf_file" "$generated_pdf_file"; then
+            echo "Comparing '$committed_pdf_file' with '$generated_pdf_file' using '${{ env.PDF_DIFF_COMMAND }}'..."
+            # Prepend with xvfb-run if the command is 'diffpdf' (which is known to need it)
+            # 'diff-pdf' (with hyphen) usually doesn't need it.
+            COMPARISON_CMD=""
+            if [ "${{ env.PDF_DIFF_COMMAND }}" = "diffpdf" ]; then
+              COMPARISON_CMD="xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' ${{ env.PDF_DIFF_COMMAND }}"
+            else
+              COMPARISON_CMD="${{ env.PDF_DIFF_COMMAND }}"
+            fi
+
+            # The $COMPARISON_CMD variable will be expanded by the shell here
+            if $COMPARISON_CMD "$committed_pdf_file" "$generated_pdf_file"; then
               echo "✅ PDF '$committed_pdf_file' is up-to-date with '$typ_file'."
             else
               echo "::error file=$typ_file,title=PDF Out of Date::PDF '$committed_pdf_file' is not identical to the output of '$typ_file'. Please recompile '$typ_file' and commit the updated PDF."
-              # If you uncomment this, also use 'diffpdf'
-              # visual_diff_output_filename="diff_$(basename "${typ_file%.typ}").pdf"
-              # diffpdf --output-diff="$temp_dir/$visual_diff_output_filename" "$committed_pdf_file" "$generated_pdf_file"
-              # echo "Visual diff generated: $temp_dir/$visual_diff_output_filename (not uploaded by default)"
               FAILURE_DETECTED=1
             fi
             rm -rf "$temp_dir"
-          done
+          done < <(echo "${{ steps.changed_typst_files.outputs.changed_files_list }}") # End of process substitution
 
           echo "--------------------------------------------------"
           if [ "$FAILURE_DETECTED" -eq 1 ]; then
