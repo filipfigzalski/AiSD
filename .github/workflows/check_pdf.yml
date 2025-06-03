@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Typst
-        uses: typst/setup-typst@v1
+        uses: typst-community/setup-typst@v3 # Corrected action
         with:
           version: "latest" # Or pin to a specific Typst version, e.g., '0.11.0'
 
@@ -109,20 +109,4 @@ jobs:
               echo "::error file=$typ_file,title=PDF Out of Date::PDF '$committed_pdf_file' is not identical to the output of '$typ_file'. Please recompile '$typ_file' and commit the updated PDF."
               # Optional: You could generate a visual diff PDF and upload it as an artifact
               # diff_output_filename="diff_$(basename "${typ_file%.typ}").pdf"
-              # diff-pdf --output-diff="$temp_dir/$diff_output_filename" "$committed_pdf_file" "$generated_pdf_file"
-              # echo "Visual diff generated: $temp_dir/$diff_output_filename (not uploaded by default)"
-              # To upload, you'd add an actions/upload-artifact step here or after the loop.
-              FAILURE_DETECTED=1
-            fi
-
-            rm -rf "$temp_dir" # Clean up temp directory for this file
-          done
-
-          echo "--------------------------------------------------"
-          if [ "$FAILURE_DETECTED" -eq 1 ]; then
-            echo "❌ PDF consistency check failed for one or more files."
-            exit 1
-          else
-            echo "✅ All checked Typst files have up-to-date PDFs."
-          fi
-        shell: bash
+              # diff-pdf --output-diff="$temp_dir/$diff_output_filename" "$committed_pdf_file"
