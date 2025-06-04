@@ -11,6 +11,8 @@
 #set par(justify: true)
 #set enum(numbering: "1ia.")
 
+#import "@preview/cetz:0.3.4"
+
 = Zadanie 6
 
 == Treść
@@ -65,22 +67,18 @@ Dowód poprzez indukcję po $k$:
 // $V_"kol"$ - zbiór wierzchołków pomalowanych
 
 Niech zbiór wierzchołków $P$ to wynik zwrócony przez nasz algorytm i niech $"OPT"$
-będzie dowolnym poprawnym pokolorowaniem wierzchołków, który jest maksymalny w
-pod względem swojego rozmiaru.
+będzie dowolnym poprawnym pokolorowaniem wierzchołków, który jest maksymalny pod
+względem swojego rozmiaru.
 
 Załóżmy nie wprost, że $abs("OPT") > abs(P)$. W $P$ mamy pomalowane $k/2$ warstw,
 a w $"OPT"$ mamy więcej wierzchołków pokolorowanych.
 
 Niech $v$ to wierzchołek z najniższej możliwej nie w pełni pokolorowanej w $"OPT"$
 warstwie, a $w$ to pierwszy pokolorowany wierzchołek na ścieżce z $v$ do
-dowolnego liścia.
+dowolnego innego wierzchołka który jest liściem.
 
-(Możemy wziąć dowolny liść ponieważ w OPTcie każda ścieżka ma conajmniej k - 1
-pokolorowanych wierzchołków.)
-
-to pierwszy pokolorowany wierzchołek z dowolnej wyższej warstwy. Możemy
-zauważyć, że na ścieżce z $v$ do $w$ nie ma więcej pomalowanych wierzchołków.
-*Trzeba to udowodnić.*
+Możemy zauważyć, że na ścieżce z $v$ do $w$ nie ma więcej pomalowanych
+wierzchołków.
 
 Weźmy dowolną ścieżkę $S$ z $"OPT"$.
 
@@ -98,7 +96,7 @@ na ścieżce $S$:
 
 + *$v in.not S and w in S$*:
 
-  Liczba pomalowanych wierzchołków na ścieżce $S$ się zmniejszy o $1$.
+  Liczba pomalowanych wierzchołków na ścieżce $S$ zmniejszy się dokładnie o $1$.
 
 + *$v in S and w in.not S$*:
 
@@ -107,9 +105,3 @@ na ścieżce $S$:
   więc, że tak nie jest, czyli $S$ posiada dokładnie $k$ pokolorowanych
   wierzchołków.
 
-  Niech $l$ będzie liczbą pokolorowanych wierzchołków na dowolnej ścieżce.
-
-  Niech $x, y$ to początek i koniec ścieżki $S$.
-
-  Niech $S'$ to maksymalna ścieżka zawierająca $v$ i $w$ (czyli $v$ i $w$ nie
-  muszą być końcami tejże ścieżki).
