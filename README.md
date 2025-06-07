@@ -46,7 +46,7 @@
 - [ ] Zadanie 3
 - [ ] Zadanie 4
 - [x] [Zadanie 5](./L02/L02Z05.pdf)
-- [ ] Zadanie 6
+- [x] [Zadanie 6](./L02/L02Z06.pdf)
 - [ ] Zadanie 7
 - [ ] Zadanie 8
 - [ ] Zadanie 9
