@@ -48,7 +48,7 @@
 - [x] [Zadanie 5](./L02/L02Z05.pdf)
 - [x] [Zadanie 6](./L02/L02Z06.pdf)
 - [ ] Zadanie 7
-- [ ] Zadanie 8
+- [x] [Zadanie 8](./L02/L02Z08.pdf)
 - [ ] Zadanie 9
 - [ ] Zadanie 10 **Z**
 
