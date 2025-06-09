@@ -46,7 +46,7 @@
 - [ ] Zadanie 3
 - [ ] Zadanie 4
 - [x] [Zadanie 5](./L02/L02Z05.pdf)
-- [x] [Zadanie 6](./L02/L02Z06.pdf)
+- [x] [Zadanie 6](./L02/L02Z06.pdf) *
 - [ ] Zadanie 7
 - [ ] Zadanie 8
 - [ ] Zadanie 9
@@ -138,3 +138,5 @@
 - [ ] Zadanie 5
 </details>
 
+
+> _`*` - approved by KLo_
