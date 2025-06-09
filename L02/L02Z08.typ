@@ -10,6 +10,8 @@
 ], numbering: "-1-")
 #set par(justify: true)
 #set enum(numbering: "1ia.")
+#set document(title: "AiSD L02Z08 2025", author: "Filip Figzał")
+#set text(lang: "pl")
 
 = Zadanie 8
 
@@ -20,7 +22,16 @@ znajdujących się na pozycjach $i$ oraz $j$. Koszt takiej operacji określamy n
 $abs(i - j)$. Kosztem ciągu operacji `swap` jest suma kosztów poszczególnych
 operacji.
 
+Ułóż algorytm, który dla danych $pi$ oraz $sigma$ - permutacji liczb ${1, 2, ..., n}$,
+znajdzie ciąg operacji `swap` o najmniejszym koszcie, który przekształca
+permutację $pi$ w permutację $sigma$.
+
 == Algorytm
 
-+ Dla każdego:
-  + Jeżeli
+$Tau$
+
+== Dowód poprawności
+
+== Dowód minimalności
+
+== Dowód liniowości
