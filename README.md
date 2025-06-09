@@ -36,7 +36,7 @@
 
 <details>
 
-<summary><b>Lista 2</b> (5/11)</summary>
+<summary><b>Lista 2</b> (6/11)</summary>
 
 ## [Lista 2](./L02/Lista%202.pdf)
 
