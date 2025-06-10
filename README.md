@@ -75,13 +75,13 @@
 
 <details>
 
-<summary><b>Lista 4</b> (0/8)</summary>
+<summary><b>Lista 4</b> (1/8)</summary>
 
 ## [Lista 4](./L04/Lista%204.pdf)
 
 - [ ] Zadanie 1
 - [ ] Zadanie 2
-- [ ] Zadanie 3
+- [x] [Zadanie 3](./L04/L04Z03.pdf)
 - [ ] Zadanie 4
 - [ ] Zadanie 5
 - [ ] Zadanie 6
